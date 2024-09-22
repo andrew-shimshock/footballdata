@@ -1,0 +1,6 @@
+streamlit
+espn_api
+seaborn
+matplotlib
+altair
+pandas
