@@ -22,7 +22,25 @@ Explore:
 - **Top Player Rankings** for each position (ranked by total points scored).
 """)
 
-# Function to load data at the team and player level
+### SECTION: REFRESH BUTTON ###
+# Initialize the session state for tracking refresh
+if "refresh_count" not in st.session_state:
+    st.session_state["refresh_count"] = 0  # Track how many times refresh happens
+
+# Create a refresh button
+if st.button('🔄 Refresh Data'):
+    st.session_state["refresh_count"] += 1  # Increment the refresh count
+    
+    # Clear the cache by resetting the cached data
+    st.cache_data.clear()  # Clear cached data for team and player loading functions
+
+    st.success("Data refreshed successfully! 🎉")
+
+# Show the current refresh count in the UI (for reference)
+st.write(f"Data refreshed {st.session_state['refresh_count']} time(s).")
+
+### TEAM-LEVEL DATA LOADING ###
+# Function to load data at the team level (using caching)
 @st.cache_data
 def load_team_data():
     all_data = []
@@ -52,16 +70,16 @@ def load_team_data():
     
     return df
 
+# Function to load player data (using caching)
 @st.cache_data
 def load_player_data():
     all_player_data = []
-    
+
     total_weeks = 12  # Adjust for appropriate number of weeks in the season
 
     # Loop through each week and fetch player-related data
     for week in range(1, total_weeks + 1):
         box_scores = league.box_scores(week)
-        
         for box_score in box_scores:
             # Process home team players
             for player in box_score.home_lineup:
@@ -93,12 +111,11 @@ def load_player_data():
     player_df = pd.DataFrame(all_player_data)
     return player_df
 
-# Load data for teams and players
+# Load the team and player data with caching and refresh capability
 team_df = load_team_data()
 player_df = load_player_data()
 
-### TEAM-LEVEL SECTION - Same as Earlier (Heatmap and Bar Chart) ###
-
+### DISPLAYING TEAM-LEVEL DATA (Like before) ###
 # User Input: Select specific teams to visualize
 teams = st.multiselect(
     "Select teams to visualize:",
@@ -114,9 +131,8 @@ df_filtered = team_df[
     (team_df["Team"].isin(teams)) & (team_df["Week"].between(weeks[0], weeks[1]))
 ]
 
-# HEATMAP (Teams' Differences)
+# HEATMAP SECTION
 st.subheader("Heatmap: Team Performance (Difference Between Actual vs Projected Points)")
-
 if not df_filtered.empty:
     heatmap_data = df_filtered.pivot(index='Team', columns='Week', values='Difference')
 
@@ -129,7 +145,7 @@ if not df_filtered.empty:
 else:
     st.write("No data available for the selected teams and weeks.")
 
-# BAR CHART (Total Points for Week)
+# BAR CHART SECTION (Total Points for Week)
 st.subheader(f"Bar Chart: Points for the Selected Week")
 current_week_df = df_filtered[df_filtered["Week"] == weeks[1]]
 
@@ -150,57 +166,3 @@ if not current_week_df.empty:
     st.altair_chart(bar_chart, use_container_width=True)
 else:
     st.write(f"No data available for Week {weeks[1]} with the current team selection.")
-
-
-### PLAYER-LEVEL SECTION - Top 10 Players by Position ###
-
-st.subheader("Top 10 Players by Position")
-
-# User Input: Select player position
-position = st.selectbox(
-    "Select the position to rank players by points scored:",
-    options=player_df['Position'].unique(),
-    index=0  # Default to the first position in the list
-)
-
-# User Input: Select the week (can be "all weeks" or a specific one)
-selected_week = st.slider(
-    "Select a week for player rankings (select '1' to show all weeks):",
-    min_value=1,
-    max_value=12,
-    value=1
-)
-
-# Filter player data based on selected position and week
-if selected_week == 1:
-    player_filtered = player_df[player_df['Position'] == position]
-else:
-    player_filtered = player_df[(player_df['Position'] == position) & (player_df['Week'] == selected_week)]
-
-# Group by player name and position to get total points scored in the selected week(s)
-player_ranked = player_filtered.groupby(['Player Name', 'Position']).agg(
-    total_points=('Points Scored', 'sum')
-).reset_index()
-
-# Sort players by total points scored
-top_players = player_ranked.sort_values(by='total_points', ascending=False).head(10)
-
-if not top_players.empty:
-    # Display top 10 players for the selected position
-    st.write(f"Top 10 {position} for Week {selected_week if selected_week > 1 else 'all weeks'}")
-    st.dataframe(top_players)
-
-    # Optional - Plot a bar chart of top players
-    bar_chart_players = alt.Chart(top_players).mark_bar().encode(
-        x=alt.X('Player Name:N', title='Player'),
-        y=alt.Y('total_points:Q', title='Total Points'),
-        tooltip=['Player Name', 'total_points'],  # Add tooltip for extra detail
-        color=alt.value("orange")  # You can customize the color here
-    ).properties(
-        title=f'Top 10 {position} Players',
-        width=600,
-        height=400
-    )
-    st.altair_chart(bar_chart_players, use_container_width=True)
-else:
-    st.write(f"No data available for {position} in Week {selected_week}.")
